@@ -11,12 +11,36 @@ app.use(express.static(__dirname + '/public'));
 
 var clientInfo = {};
 
-io.on('connection', function (socket) {
+//Sends Current users to provided socket
+
+function sendCurrentUsers(socket) {
+	var info = clientInfo[socket.id];
+	var users = [];
+	if(typeof info === 'undefine') {
+		return;
+	}
+
+	Object.keys(clientInfo).forEach(function (socktId) {
+		var userInfo = clientInfo[socktId];
+
+		if(info.room === userInfo.room) {
+			users.push(userInfo.name);
+		}
+	});
+
+	socket.emit('message', {
+		name: 'System',
+		text: 'Current users ' + users.join(', '),
+		timestamp: moment().valueOf()
+	})
+}
+
+io.on('connection', function(socket) {
 	console.log('User Connect Via socket.io');
 
-	socket.on('disconnect', function () {
+	socket.on('disconnect', function() {
 		var userData = clientInfo[socket.id];
-		if(typeof userData !== 'undefine') {
+		if (typeof userData !== 'undefine') {
 			socket.leave(userData.room);
 			io.to(userData.room).emit('message', {
 				name: 'System',
@@ -28,7 +52,7 @@ io.on('connection', function (socket) {
 		}
 	});
 
-	socket.on('joinRoom' , function (req) {
+	socket.on('joinRoom', function(req) {
 		clientInfo[socket.id] = req;
 		socket.join(req.room);
 		socket.broadcast.to(req.room).emit('message', {
@@ -38,11 +62,14 @@ io.on('connection', function (socket) {
 		});
 	});
 
-	socket.on('message', function (message) {
+	socket.on('message', function(message) {
 		console.log('Message Received ' + message.text);
-
-		message.timestamp = moment().valueOf();
-		io.to(clientInfo[socket.id].room).emit('message', message);
+		if (message.text === '@currentUsers') {
+			sendCurrentUsers(socket);
+		} else {
+			message.timestamp = moment().valueOf();
+			io.to(clientInfo[socket.id].room).emit('message', message);
+		}
 	});
 
 	socket.emit('message', {
